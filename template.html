@@ -1,0 +1,320 @@
+<title>Gameplay Benchmark</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single reading column of instrument panels; summary scorecard first, then one chart per metric, grouped by what a server owner asks. */
+:root {
+  --bg: #f6f6f3;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --line: rgba(11,11,11,0.10);
+  --accent: #b5470f;
+  --best-bg: #e4f1e4;
+  --best-ink: #006300;
+  --s1: #2a78d6;
+  --s2: #eb6834;
+  --s3: #1baf7a;
+  --s4: #eda100;
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --line: rgba(255,255,255,0.10); --accent: #f08a4b;
+    --best-bg: #13301a; --best-ink: #4cc74c;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --line: rgba(255,255,255,0.10); --accent: #f08a4b;
+  --best-bg: #13301a; --best-ink: #4cc74c;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-inline: 20px; padding-block: 36px 64px; display: grid; gap: 40px; }
+header { display: grid; gap: 14px; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--font-display); font-weight: 800; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-family: var(--font-display); font-weight: 700; font-size: 22px; margin: 0; text-wrap: balance; }
+h3 { font-family: var(--font-display); font-weight: 700; font-size: 16px; margin: 0; }
+p { margin: 0; max-width: 68ch; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px 18px; font-family: var(--font-mono); font-size: 12.5px; color: var(--ink-2); }
+.meta b { color: var(--ink); font-weight: 500; }
+.legend { display: flex; flex-wrap: wrap; gap: 10px 20px; font-size: 14px; font-weight: 600; }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.legend i { width: 14px; height: 4px; border-radius: 2px; display: inline-block; }
+section { display: grid; gap: 18px; }
+.section-head { display: grid; gap: 6px; }
+.section-head p { color: var(--ink-2); }
+.findings { display: grid; gap: 10px; padding: 18px 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.findings ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 76ch; }
+.table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 14px; }
+th, td { padding: 9px 14px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+thead th { font-family: var(--font-display); font-weight: 700; font-size: 14px; }
+thead th .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 7px; vertical-align: 0; }
+tbody td { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13px; }
+tbody td:first-child { font-family: var(--font-body); font-size: 14px; color: var(--ink-2); }
+tbody tr.group td { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding-top: 16px; }
+td.best { background: var(--best-bg); color: var(--best-ink); font-weight: 500; }
+td.best::after { content: " ★"; font-size: 11px; }
+tbody tr:last-child td { border-bottom: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 16px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 16px 10px; display: grid; gap: 4px; min-width: 0; }
+.panel .sub { font-size: 13px; color: var(--muted); }
+.chart { position: relative; height: 230px; }
+.key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--ink-2); padding-block: 4px 6px; }
+.key span { display: inline-flex; align-items: center; gap: 6px; }
+.key i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.key i.dash { height: 0; border-top: 2px dashed var(--axis); border-radius: 0; }
+.bars { display: grid; gap: 14px; }
+.bar-row { display: grid; grid-template-columns: 76px 1fr; gap: 12px; align-items: center; }
+.bar-row .name { font-weight: 600; font-size: 14px; }
+.stack { display: flex; height: 26px; gap: 2px; min-width: 0; }
+.stack div { border-radius: 4px; min-width: 2px; position: relative; }
+.stack div span { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); font-family: var(--font-mono); font-size: 11px; color: #fff; white-space: nowrap; overflow: hidden; max-width: calc(100% - 8px); }
+.bar-key { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--ink-2); padding-left: 88px; }
+.bar-key i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.notes { font-size: 13.5px; color: var(--ink-2); display: grid; gap: 8px; }
+.notes ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; max-width: 80ch; }
+@media (max-width: 520px) { .bar-row { grid-template-columns: 1fr; gap: 6px; } .bar-key { padding-left: 0; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow" id="eyebrow"></div>
+    <h1 id="title"></h1>
+    <p id="intro">Every server plays the same session on its own copy of one world: builders placing and mining blocks and opening chests, miners tunnelling, AFK players and an explorer, with an egg farm and a wheat farm running on their own.</p>
+    <div class="meta" id="meta"></div>
+    <div class="legend" id="legend"></div>
+  </header>
+
+  <section class="findings" id="findings-box">
+    <h2 id="findings-title">What the numbers say</h2>
+    <!--__FINDINGS__-->
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Scorecard</h2>
+      <p>Averages over the run. ★ marks the best value in each row: lowest for cost, highest for work done by the bots.</p>
+    </div>
+    <div class="table-wrap"><table id="scorecard"></table></div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Tick time</h2>
+      <p>Milliseconds per game tick, sampled with <code>tick query</code> every 30 seconds. A server has 50 ms per tick to hold 20 TPS; lower is more headroom.</p>
+    </div>
+    <div class="grid2">
+      <div class="panel"><h3>Average MSPT</h3><div class="sub">ms per tick, per-minute mean</div><div class="chart"><canvas id="c-mspt"></canvas></div></div>
+      <div class="panel"><h3>95th-percentile MSPT</h3><div class="sub">ms, slowest 5% of ticks</div><div class="chart"><canvas id="c-mspt95"></canvas></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>How multithreaded is each server?</h2>
+      <p>Each server may use up to 4 cores. Cores busy is total CPU time divided by wall time. The busiest-thread chart shows how much of that load sits on a single thread: a server bound to one main thread stays near 100% there.</p>
+    </div>
+    <div class="grid2">
+      <div class="panel"><h3>Cores busy</h3><div class="sub">of a 4-core limit</div><div class="chart"><canvas id="c-cores"></canvas></div></div>
+      <div class="panel"><h3>Share of CPU on the busiest thread</h3><div class="sub">% of the server's CPU time</div><div class="chart"><canvas id="c-share"></canvas></div></div>
+      <div class="panel"><h3>Threads doing real work</h3><div class="sub">threads above 5% of a core</div><div class="chart"><canvas id="c-active"></canvas></div></div>
+      <div class="panel"><h3>Where the CPU goes</h3><div class="sub">average % of one core, by thread name</div><div class="bars" id="thread-bars"></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Resources</h2>
+      <p>Measured from each server's container: memory includes the JVM heap or Rust allocator plus page cache; disk and network are what the container actually read, wrote and sent.</p>
+    </div>
+    <div class="grid2">
+      <div class="panel"><h3>Memory</h3><div class="sub">MiB in use</div><div class="chart"><canvas id="c-mem"></canvas></div></div>
+      <div class="panel"><h3>Disk written</h3><div class="sub">MiB per minute</div><div class="chart"><canvas id="c-write"></canvas></div></div>
+      <div class="panel"><h3>Network sent to players</h3><div class="sub">MiB per minute</div><div class="chart"><canvas id="c-net"></canvas></div></div>
+      <div class="panel"><h3>World size on disk</h3><div class="sub">MiB</div><div class="chart"><canvas id="c-world"></canvas></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>Gameplay</h2>
+      <p>What the bots got done, counted from server confirmations: blocks placed and broken, chests opened and items picked up. Every server runs the same session schedule, so a server that keeps up confirms the same work.</p>
+    </div>
+    <div class="panel"><h3>Bot actions confirmed</h3><div class="sub">per minute, all bots on the server</div><div class="chart"><canvas id="c-actions"></canvas></div></div>
+  </section>
+
+  <section class="notes">
+    <h2>How this was run</h2>
+    <ul id="method"></ul>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const D = /*__DATA__*/null;
+const KEYS = D.servers.map(s => s.key);
+const LABEL = Object.fromEntries(D.servers.map(s => [s.key, s.label]));
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const color = k => css("--s" + (KEYS.indexOf(k) % 4 + 1));
+const fmt = (v, d = 1) => v == null ? "–" : Number(v).toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d });
+const startDate = new Date(D.start * 1000);
+
+document.getElementById("meta").innerHTML = [
+  ["Started", startDate.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })],
+  ["Elapsed", fmt(D.elapsed_min / 60, 2) + " h"],
+  ["Sampling", "every 10 s"],
+].map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join("");
+
+function renderLegend() {
+  document.getElementById("legend").innerHTML = KEYS.map(k => `<span><i style="background:${color(k)}"></i>${LABEL[k]}</span>`).join("");
+}
+
+// Scorecard: [label, summary field, digits, better ("low" | "high" | null), unit]
+const ROWS = [
+  ["Tick time"],
+  ["Average MSPT", "mspt_avg", 2, "low", " ms"],
+  ["95th-percentile MSPT", "mspt_p95", 2, "low", " ms"],
+  ["Worst minute MSPT", "mspt_max", 1, "low", " ms"],
+  ["Samples over 50 ms", "over_50", 0, "low", ""],
+  ["CPU"],
+  ["Cores busy (avg)", "cores_avg", 2, "low", ""],
+  ["Busiest thread (avg)", "top_thread_avg", 1, null, "%"],
+  ["Threads above 5% (avg)", "threads_active_avg", 1, null, ""],
+  ["Memory and disk"],
+  ["Memory (avg)", "mem_avg", 0, "low", " MiB"],
+  ["Memory (peak)", "mem_peak", 0, "low", " MiB"],
+  ["Disk written", "written_mib", 0, "low", " MiB"],
+  ["Disk read", "read_mib", 0, "low", " MiB"],
+  ["World size", "world_mib", 0, "low", " MiB"],
+  ["Network sent", "net_tx_mib", 0, "low", " MiB"],
+  ["Gameplay (confirmed)"],
+  ["Blocks placed", "placed", 0, "high", ""],
+  ["Blocks broken", "broken", 0, "high", ""],
+  ["Chest opens", "chests", 0, "high", ""],
+  ["Item pickups", "pickups", 0, "high", ""],
+  ["Bot sessions dropped", "ended_early", 0, "low", ""],
+];
+function renderScorecard() {
+  const head = `<thead><tr><th>Metric</th>${KEYS.map(k => `<th><span class="sw" style="background:${color(k)}"></span>${LABEL[k]}</th>`).join("")}</tr></thead>`;
+  const body = ROWS.map(r => {
+    if (r.length === 1) return `<tr class="group"><td colspan="${KEYS.length + 1}">${r[0]}</td></tr>`;
+    const [label, f, d, better, unit] = r;
+    const vals = KEYS.map(k => D.summary[k][f]);
+    const nums = vals.filter(v => v != null);
+    const best = better === "low" ? Math.min(...nums) : better === "high" ? Math.max(...nums) : null;
+    const tie = best != null && nums.filter(v => v === best).length === nums.length;
+    return `<tr><td>${label}</td>${vals.map(v => `<td class="${best != null && !tie && v === best ? "best" : ""}">${v == null ? "–" : fmt(v, d) + unit}</td>`).join("")}</tr>`;
+  }).join("");
+  document.getElementById("scorecard").innerHTML = head + "<tbody>" + body + "</tbody>";
+}
+
+const charts = [];
+function lineChart(id, field, opts = {}) {
+  const el = document.getElementById(id);
+  const ink2 = css("--ink-2"), muted = css("--muted"), grid = css("--grid"), axis = css("--axis");
+  const datasets = KEYS.map(k => ({
+    label: LABEL[k], data: (D["series_" + k][field] || []).map(v => v == null ? null : (opts.map ? opts.map(v) : v)),
+    borderColor: color(k), backgroundColor: color(k), borderWidth: 2, pointRadius: 0, pointHoverRadius: 4,
+    pointHoverBorderWidth: 2, pointHoverBorderColor: css("--surface"), tension: 0.25, spanGaps: false,
+  }));
+  if (opts.budget != null) datasets.push({
+    label: opts.budgetLabel, data: D.minutes.map(() => opts.budget), borderColor: axis, borderDash: [5, 4],
+    borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 0,
+  });
+  // Colour key above each chart, in series order; the dashed reference line gets its own entry.
+  const panel = el.closest(".panel");
+  let key = panel.querySelector(".key");
+  if (!key) { key = document.createElement("div"); key.className = "key"; panel.insertBefore(key, el.parentElement); }
+  key.innerHTML = KEYS.map(k => `<span><i style="background:${color(k)}"></i>${LABEL[k]}</span>`).join("")
+    + (opts.budget != null ? `<span><i class="dash"></i>${opts.budgetLabel}</span>` : "");
+  const c = new Chart(el, {
+    type: "line",
+    data: { labels: D.minutes, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: css("--surface"), titleColor: css("--ink"), bodyColor: ink2, borderColor: css("--line"), borderWidth: 1,
+          padding: 10, boxPadding: 4, usePointStyle: true,
+          titleFont: { family: css("--font-body"), weight: "600" }, bodyFont: { family: css("--font-mono"), size: 12 },
+          filter: i => i.raw != null && i.dataset.label !== opts.budgetLabel,
+          callbacks: {
+            title: items => `Minute ${items[0].label}`,
+            label: i => ` ${i.dataset.label}: ${fmt(i.raw, opts.digits ?? 1)}${opts.unit ?? ""}`,
+          },
+        },
+      },
+      scales: {
+        x: { type: "linear", min: 0, max: Math.max(D.minutes.length - 1, 10), grid: { display: false }, border: { color: axis },
+             ticks: { color: muted, font: { family: css("--font-mono"), size: 11 }, stepSize: 15, callback: v => v + "m" } },
+        y: { beginAtZero: true, suggestedMax: opts.suggestedMax, max: opts.max, grid: { color: grid }, border: { display: false },
+             ticks: { color: muted, font: { family: css("--font-mono"), size: 11 }, maxTicksLimit: 5, callback: v => fmt(v, opts.tickDigits ?? 0) + (opts.tickUnit ?? "") } },
+      },
+    },
+  });
+  charts.push(c);
+}
+
+const GROUP_INK = ["#2a78d6", "#1baf7a", "#eb6834", "#4a3aa7", "#e87ba4"];
+function renderThreadBars() {
+  // Fixed per-server stacks: top 4 thread groups + "other", widths on a shared scale (max total across servers).
+  const totals = KEYS.map(k => (D.threads[k] || []).reduce((a, g) => a + g.pct, 0));
+  const scale = Math.max(...totals, 1);
+  const html = KEYS.map((k, i) => {
+    const groups = (D.threads[k] || []).slice(0, 4);
+    const other = totals[i] - groups.reduce((a, g) => a + g.pct, 0);
+    const segs = groups.map((g, j) => ({ name: g.group, pct: g.pct, threads: g.threads, fill: color(k), op: 1 - j * 0.18 }));
+    if (other > 0.05) segs.push({ name: "rest", pct: other, fill: css("--axis"), op: 1 });
+    const bar = segs.map(s => `<div title="${s.name}${s.threads ? ` (${s.threads} thread${s.threads > 1 ? "s" : ""})` : ""}: ${fmt(s.pct, 1)}% of a core" style="flex:0 0 ${100 * s.pct / scale}%;background:${s.fill};opacity:${s.op}"><span>${s.pct / scale > 0.12 ? s.name : ""}</span></div>`).join("");
+    const list = segs.map(s => `${s.name} ${fmt(s.pct, 1)}%`).join(" · ");
+    return `<div class="bar-row"><div class="name">${LABEL[k]}</div><div class="stack" aria-label="${LABEL[k]}: ${list}">${bar}</div></div><div class="bar-key">${list}</div>`;
+  }).join("");
+  document.getElementById("thread-bars").innerHTML = html;
+}
+
+document.title = D.title;
+document.getElementById("title").textContent = D.title;
+document.getElementById("eyebrow").textContent = D.subtitle;
+document.getElementById("method").innerHTML = (D.notes || []).map(t => `<li>${t}</li>`).join("");
+
+function renderAll() {
+  charts.splice(0).forEach(c => c.destroy());
+  renderLegend(); renderScorecard(); renderThreadBars();
+  lineChart("c-mspt", "mspt", { digits: 2, unit: " ms", tickUnit: " ms" });
+  lineChart("c-mspt95", "mspt_p95", { digits: 2, unit: " ms", tickUnit: " ms" });
+  lineChart("c-cores", "cores", { digits: 2, max: 4, budget: 4, budgetLabel: "4-core limit", tickDigits: 0 });
+  lineChart("c-share", "top_share", { digits: 0, unit: "%", max: 100, tickUnit: "%" });
+  lineChart("c-active", "threads_active", { digits: 1, tickDigits: 0 });
+  lineChart("c-mem", "mem_mib", { digits: 0, unit: " MiB" });
+  lineChart("c-write", "write_per_min", { digits: 1, unit: " MiB" });
+  lineChart("c-net", "net_tx_per_min", { digits: 2, unit: " MiB", tickDigits: 1 });
+  lineChart("c-world", "world_mib", { digits: 0, unit: " MiB" });
+  lineChart("c-actions", "actions", { digits: 0 });
+}
+if (window.Chart) {
+  Chart.defaults.font.family = css("--font-body");
+  renderAll();
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", renderAll);
+  new MutationObserver(renderAll).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+} else {
+  renderLegend(); renderScorecard(); renderThreadBars();
+}
+</script>

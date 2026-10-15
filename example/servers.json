@@ -1,0 +1,39 @@
+{
+  "title": "Paper vs GraalVM Paper vs PEX",
+  "subtitle": "26.3 · 8 bots each · 4 CPU cores each",
+  "notes": [
+    "All servers ran at once on one Pelican node, each limited to 4 CPU cores and 8 GB of RAM, with view and simulation distance 10. Replace the placeholder IDs with your Pelican server UUIDs (they are also the Docker container names).",
+    "Every server started from its own copy of world/base-world-262.tgz.",
+    "Bots (8 per server: 3 builders, 2 miners, 2 AFK, 1 explorer) played 20–60 minute sessions with 5–15 minute breaks on a seeded schedule, identical for every server."
+  ],
+  "disk_guard_path": "/",
+  "servers": [
+    {
+      "key": "paper",
+      "label": "Paper",
+      "port": 25605,
+      "bot_prefix": "Paper",
+      "container": "11111111-1111-1111-1111-111111111111",
+      "console": "wings:11111111-1111-1111-1111-111111111111",
+      "world_dir": "/var/lib/pelican/volumes/11111111-1111-1111-1111-111111111111/world"
+    },
+    {
+      "key": "native",
+      "label": "GraalVM Paper",
+      "port": 25601,
+      "bot_prefix": "Native",
+      "container": "22222222-2222-2222-2222-222222222222",
+      "console": "wings:22222222-2222-2222-2222-222222222222",
+      "world_dir": "/var/lib/pelican/volumes/22222222-2222-2222-2222-222222222222/world"
+    },
+    {
+      "key": "pex",
+      "label": "PEX",
+      "port": 25603,
+      "bot_prefix": "Pex",
+      "container": "33333333-3333-3333-3333-333333333333",
+      "console": "wings:33333333-3333-3333-3333-333333333333",
+      "world_dir": "/var/lib/pelican/volumes/33333333-3333-3333-3333-333333333333/world"
+    }
+  ]
+}
