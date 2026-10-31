@@ -68,7 +68,8 @@ sections). Set both.
 - World: extract the tarball and rename `base-world-262/` to `world/`. Pumpkin and PEX read the vanilla world as is.
 - Console:
   - Pelican: `wings:<server-uuid>`. Set `use_tty = false` in `pumpkin.toml`, or the panel's stop can hang.
-  - Running it yourself: `tail -n0 -f cmds.txt | ./pumpkin` with `use_tty = false`, and `file:cmds.txt`.
+  - Running it yourself: `tail -n0 -f cmds.txt | ./pumpkin` with `use_tty = false`, and `file:cmds.txt`. Without
+    Docker, start that under `systemd-run` (see "Without Docker" in the README).
 - Storage settings are part of what you're measuring. Upstream Pumpkin defaults to LZ4 with whole-file region
   writes, PEX to zlib with in-place writes. Leave each on its own defaults, or set them the same on purpose, and
   say which in your notes (`[world.chunk]`: `write_in_place`, `compression.algorithm`).

@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """Builds the benchmark report page: report.py <servers.json> <sampler_dir> <fleet_dir> <out.html> [findings.html]
 
-Reads the sampler's CSVs, MSPT from each server's timestamped `tick query` answers (docker logs -t) and
-bot activity from the bots' STATS lines, buckets everything into 1-minute steps from the fleet's start and
-writes the dataset into template.html. Prints a summary table. If Docker runs somewhere else (for example
-inside a Proxmox container), set CMD_PREFIX to the command that reaches it, e.g. CMD_PREFIX="pct exec 109 --".
+Reads the sampler's CSVs, MSPT from each server's `tick query` answers (from its "log" file, else from
+docker logs -t) and bot activity from the bots' STATS lines, buckets everything into 1-minute steps from the
+fleet's start and writes the dataset into template.html. Prints a summary table. If Docker runs somewhere else
+(for example inside a Proxmox container), set CMD_PREFIX to the command that reaches it, e.g.
+CMD_PREFIX="pct exec 109 --".
 """
-import collections, csv, glob, io, json, os, re, shlex, statistics, subprocess, sys, time
+import bisect, collections, csv, glob, io, json, os, re, shlex, statistics, subprocess, sys, time
 from datetime import datetime, timezone
 
 cfg_path, run, bots_dir, out_html = sys.argv[1:5]
 template = os.path.join(os.path.dirname(os.path.abspath(__file__)), "template.html")
 with open(cfg_path) as f:
     CFG = json.load(f)
-SERVERS = {srv["key"]: (srv["label"], srv["container"], srv["bot_prefix"]) for srv in CFG["servers"]}
+SERVERS = {srv["key"]: (srv["label"], srv["bot_prefix"], srv) for srv in CFG["servers"]}
 PREFIX = shlex.split(os.environ.get("CMD_PREFIX", ""))
 start = int(open(os.path.join(bots_dir, "start_unix")).read())
 now = int(time.time())
@@ -54,7 +55,39 @@ avg_re = re.compile(r"Average time per tick: ([\d.]+) ?ms")
 pct_re = re.compile(r"P50: ([\d.]+) ?ms,? P95: ([\d.]+) ?ms,? P99: ([\d.]+) ?ms")
 ts_re = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)")
 
-for key, (label, container, prefix) in SERVERS.items():
+
+def log_file_lines(key, path):
+    """(unix time, line) for each line of a server's log file written after the sampler's first `tick query`.
+
+    Server logs carry no date, and PEX prints command output with no time at all, so a line gets the time of the
+    last `tick query` sent before it was written: the sampler notes the log's size at each send."""
+    try:
+        sent = sorted((int(r["log_bytes"]), int(r["unix_time"])) for r in rows("tick_queries.csv") if r["server"] == key)
+    except OSError:
+        return []
+    offsets, res, pos = [o for o, _ in sent], [], 0
+    with open(path, "rb") as f:
+        for raw in f:
+            if (i := bisect.bisect_right(offsets, pos) - 1) >= 0:
+                res.append((sent[i][1], raw.decode(errors="replace")))
+            pos += len(raw)
+    return res
+
+
+def console_lines(key, srv):
+    """(unix time, line) for what the server printed: its "log" file, else its Docker container's log."""
+    if srv.get("log"):
+        return log_file_lines(key, srv["log"])
+    since = datetime.fromtimestamp(start, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    res = []
+    for line in ct("docker", "logs", "-t", "--since", since, srv["container"]).splitlines():
+        if (tm := ts_re.match(line)):
+            t = datetime.strptime(tm.group(1), "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc).timestamp()
+            res.append((t, line))
+    return res
+
+
+for key, (label, prefix, srv) in SERVERS.items():
     data["servers"].append({"key": key, "label": label})
     srows = [r for r in samples if r["server"] == key and r["alive"] == "1"]
     by = collections.defaultdict(lambda: collections.defaultdict(list))
@@ -79,14 +112,10 @@ for key, (label, container, prefix) in SERVERS.items():
             prev = v if v is not None else prev
         s[f.replace("_mib", "_per_min")] = out
     # MSPT from tick query output
-    since = datetime.fromtimestamp(start, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
-    logs = ct("docker", "logs", "-t", "--since", since, container)
     mspt, p95 = collections.defaultdict(list), collections.defaultdict(list)
-    for line in logs.splitlines():
-        tm = ts_re.match(line)
-        if not tm:
+    for t, line in console_lines(key, srv):
+        if t < start:
             continue
-        t = datetime.strptime(tm.group(1), "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc).timestamp()
         if (a := avg_re.search(line)):
             mspt[minute(t)].append(float(a.group(1)))
         if (p := pct_re.search(line)):

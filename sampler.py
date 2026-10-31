@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""Resource sampler for the gameplay benchmark. Run it on the Docker host that runs the servers.
+"""Resource sampler for the gameplay benchmark. Run it as root on the host that runs the servers.
 
 usage: sampler.py <servers.json> <out_dir> <hours>
-Every 10 s, per server (from its container's cgroup v2 and /proc):
+Every 10 s, per server (from the cgroup v2 of its systemd unit or Docker container, and /proc):
   samples.csv   CPU %, memory (total, anon, file cache), cumulative disk read/write, cumulative network
                 rx/tx, thread count, threads above 5 % CPU, busiest thread's CPU %
   cores.csv     CPU % attributed to the cores each thread last ran on
   threads.csv   CPU % per thread group (thread name with digits stripped, e.g. "tokio-rt-worker")
-Every 30 s: `tick query` on every server's console (report.py reads the answers from docker logs).
+Every 30 s: `tick query` on every server's console. report.py reads the answers from docker logs, or from
+the server's "log" file: for that, tick_queries.csv records the log's size at each send.
 Every 60 s: world size (if the server has "world_dir") and free space, with a disk guard that sends
 `stop` to a server whose world passes MAX_WORLD_MIB, or to every server under MIN_FREE_GIB free.
 """
-import collections, csv, os, re, shutil, subprocess, sys, time
+import collections, csv, json, os, re, shutil, subprocess, sys, time
 
 import console
 
@@ -37,14 +38,48 @@ def cmd(srv, line):
     console.send(srv["console"], line)
 
 
-def cgroup(container):
+def cgroup(srv):
+    """The server's cgroup directory: its systemd unit's ("unit") or its Docker container's ("container")."""
     try:
-        cid = subprocess.run(["docker", "inspect", "-f", "{{.Id}}", container], capture_output=True, text=True,
-                             timeout=10).stdout.strip()
+        if srv.get("unit"):
+            cg = subprocess.run(["systemctl", "show", "-P", "ControlGroup", srv["unit"]], capture_output=True,
+                                text=True, timeout=10).stdout.strip()
+            p = f"/sys/fs/cgroup{cg}"
+        else:
+            cg = subprocess.run(["docker", "inspect", "-f", "{{.Id}}", srv["container"]], capture_output=True,
+                                text=True, timeout=10).stdout.strip()
+            p = f"/sys/fs/cgroup/system.slice/docker-{cg}.scope"
     except subprocess.TimeoutExpired:
         return None
-    p = f"/sys/fs/cgroup/system.slice/docker-{cid}.scope"
-    return p if cid and os.path.isdir(p) else None
+    return p if cg and os.path.isdir(p) else None
+
+
+# A server in a systemd unit shares the host's network namespace, so /proc/<pid>/net/dev would count the
+# whole host. nftables counts its game port instead: bytes to the port at the input hook, bytes from it at
+# the output hook. They are IP packet bytes (IP and TCP headers included) on any interface, loopback too.
+NFT_TABLE = "gameplay_bench"
+
+
+def nft_counters():
+    """{counter name: bytes} for the counters in NFT_TABLE."""
+    r = subprocess.run(["nft", "-j", "list", "counters", "table", "inet", NFT_TABLE], capture_output=True, text=True)
+    if r.returncode != 0:
+        return {}
+    return {o["counter"]["name"]: o["counter"]["bytes"] for o in json.loads(r.stdout)["nftables"] if "counter" in o}
+
+
+def nft_setup(ports):
+    # Counters that already exist keep their counts, so a restarted sampler continues the same totals.
+    have = nft_counters()
+    script = [f"add table inet {NFT_TABLE}",
+              f"add chain inet {NFT_TABLE} input {{ type filter hook input priority raw; }}",
+              f"add chain inet {NFT_TABLE} output {{ type filter hook output priority raw; }}"]
+    for port in ports:
+        for name, chain, match in ((f"rx_{port}", "input", "dport"), (f"tx_{port}", "output", "sport")):
+            if name not in have:
+                script += [f"add counter inet {NFT_TABLE} {name}",
+                           f"add rule inet {NFT_TABLE} {chain} tcp {match} {port} counter name {name}"]
+    subprocess.run(["nft", "-f", "-"], input="\n".join(script) + "\n", text=True, check=True)
 
 
 def read(path):
@@ -65,6 +100,14 @@ def cg_stats(p):
     for line in read(f"{p}/io.stat").splitlines():
         f = dict(x.partition("=")[::2] for x in line.split()[1:])
         rb, wb = max(rb, int(f.get("rbytes", 0))), max(wb, int(f.get("wbytes", 0)))
+    return cpu, mem, int(ms.get("anon", 0)), int(ms.get("file", 0)), rb, wb
+
+
+def net_bytes(srv, p, nft):
+    """Cumulative bytes received and sent by the server."""
+    if srv.get("unit"):
+        return nft.get(f"rx_{srv['port']}", 0), nft.get(f"tx_{srv['port']}", 0)
+    # A container has a network namespace of its own: read it through any of its processes.
     procs = read(f"{p}/cgroup.procs").split()
     rx = tx = 0
     if procs:
@@ -74,7 +117,7 @@ def cg_stats(p):
                 continue
             f = rest.split()
             rx += int(f[0]); tx += int(f[8])
-    return cpu, mem, int(ms.get("anon", 0)), int(ms.get("file", 0)), rb, wb, rx, tx
+    return rx, tx
 
 
 def threads(p):
@@ -110,6 +153,13 @@ def cpuset(p):
     return cpus
 
 
+def log_bytes(path):
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return 0
+
+
 def world_mib(srv):
     if not srv.get("world_dir"):
         return 0
@@ -133,19 +183,25 @@ samples = writer("samples.csv", ["unix_time", "server", "alive", "cpu_pct", "mem
 cores = writer("cores.csv", ["unix_time", "server", "cpu", "pct"])
 groups = writer("threads.csv", ["unix_time", "server", "group", "pct", "threads"])
 worlds = writer("world_mib.csv", ["unix_time", "server", "world_mib", "node_free_gib"])
+queries = writer("tick_queries.csv", ["unix_time", "server", "log_bytes"])
 
 last_cpu, last_thr, stopped = {}, {}, set()
+nft_ports = [srv["port"] for srv in SERVERS.values() if srv.get("unit")]
+if nft_ports:
+    nft_setup(nft_ports)
 log(f"start, {hours} h")
 next_tick, next_min = start, start
 while time.time() < end and len(stopped) < len(SERVERS):
     now = time.time()
+    nft = nft_counters() if nft_ports else {}
     for name, srv in SERVERS.items():
-        p = cgroup(srv["container"])
+        p = cgroup(srv)
         if p is None:
             samples.writerow([int(now), name, 0] + [""] * 11)
             last_cpu.pop(name, None); last_thr.pop(name, None)
             continue
-        cpu, mem, anon, filec, rb, wb, rx, tx = cg_stats(p)
+        cpu, mem, anon, filec, rb, wb = cg_stats(p)
+        rx, tx = net_bytes(srv, p, nft)
         prev = last_cpu.get(name)
         pct = "" if prev is None else round(100 * (cpu - prev[1]) / 1e6 / (now - prev[0]), 1)
         last_cpu[name] = (now, cpu)
@@ -179,6 +235,8 @@ while time.time() < end and len(stopped) < len(SERVERS):
     if now >= next_tick:
         for name, srv in SERVERS.items():
             if name not in stopped:
+                if srv.get("log"):
+                    queries.writerow([int(now), name, log_bytes(srv["log"])])
                 cmd(srv, "tick query")
         next_tick += 30
     if now >= next_min:

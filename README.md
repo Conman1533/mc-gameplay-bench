@@ -29,8 +29,8 @@ and the bots record what the server confirmed: blocks placed and broken, chests 
 ## Requirements
 
 - Python 3.10+ on the machine that runs the bots (no packages needed)
-- Servers running in Docker on Linux with cgroup v2, and the sampler running on that Docker host
-  (it reads each container's cgroup and `/proc`)
+- Linux with cgroup v2, each server in a Docker container or a systemd unit (see [Without Docker](#without-docker)),
+  and the sampler running as root on the machine that runs the servers (it reads each server's cgroup and `/proc`)
 - Minecraft 26.3 (protocol 777); the bots log in in offline mode, so each server needs `online-mode=false`
   and, unless it is on a private network, a whitelist of the bot names (`whitelist.py`)
 
@@ -48,13 +48,14 @@ Per-server setup for vanilla, Paper, Pumpkin, PEX, GraalVM builds, SteelMC and o
    python3 whitelist.py Pex pumpkin > data/whitelist.json        # Pumpkin, PEX
    ```
 3. **Describe the servers** in a `servers.json` (see `example/servers.json`). Per server: `key`, `label`,
-   `port`, `bot_prefix` (bot names are `<prefix>Builder0`…), `container` (Docker name or ID), `console`, and
-   optionally `world_dir` for the size chart and disk guard. The order sets the chart colours.
+   `port`, `bot_prefix` (bot names are `<prefix>Builder0`…), `container` (Docker name or ID) or `unit` and
+   `log` (see [Without Docker](#without-docker)), `console`, and optionally `world_dir` for the size chart and
+   disk guard. The order sets the chart colours.
    `console` is how commands reach the server (see `console.py`):
    - `wings:<server-uuid>`, for Pelican or Pterodactyl; set `WINGS_URL` and `WINGS_TOKEN` (the node's token)
    - `file:<path>`, for a server started as `tail -n0 -f cmds.txt | ./server`
    - `exec:<command>`, any command, with `{cmd}` replaced by the console command
-4. **Start the servers, then the sampler and the fleet** (the sampler on the Docker host):
+4. **Start the servers, then the sampler and the fleet** (the sampler as root on the servers' host):
    ```
    python3 sampler.py servers.json run/ 2.05
    python3 fleet.py servers.json bots/ 2 <server-host-ip>
@@ -63,11 +64,43 @@ Per-server setup for vanilla, Paper, Pumpkin, PEX, GraalVM builds, SteelMC and o
    ```
    python3 report.py servers.json run/ bots/ report.html [findings.html]
    ```
-   `findings.html` is an optional HTML fragment shown at the top. If Docker runs inside a container (for example
-   a Proxmox LXC), set `CMD_PREFIX`, e.g. `CMD_PREFIX="pct exec 109 --"`, so the report can read `docker logs`.
+   `findings.html` is an optional HTML fragment shown at the top. For a server in Docker the report reads the
+   `tick query` answers from `docker logs`; if Docker runs inside a container (for example a Proxmox LXC), set
+   `CMD_PREFIX`, e.g. `CMD_PREFIX="pct exec 109 --"`.
 
 The sampler's disk guard sends `stop` to a server whose world passes 5 GiB, or to all of them when the disk
 under `disk_guard_path` has less than 20 GiB free.
+
+## Without Docker
+
+Start each server as a systemd unit, with its console on a file and its output in a log file:
+
+```
+systemd-run --unit=bench-pex --collect --working-directory=/srv/bench/pex \
+  -p AllowedCPUs=4-7 -p MemoryMax=8G -p IOAccounting=yes \
+  sh -c 'tail -n0 -f cmds.txt | exec ./pex >> out.log 2>&1'
+```
+
+and name the unit and the log in `servers.json`:
+
+```json
+{"key": "pex", "label": "PEX", "port": 25612, "bot_prefix": "Pex", "unit": "bench-pex.service",
+ "console": "file:/srv/bench/pex/cmds.txt", "log": "/srv/bench/pex/out.log", "world_dir": "/srv/bench/pex/world"}
+```
+
+- **Cgroup.** The sampler asks systemd for the unit's cgroup (`systemctl show -P ControlGroup`), so a
+  `systemd-run --scope` unit works too (`"unit": "bench-pex.scope"`). `AllowedCPUs` and `MemoryMax` are the
+  CPU and memory limits; `IOAccounting=yes` turns on the disk read and write counters.
+- **Network.** Servers outside Docker share the host's network, so the sampler counts each server's game port
+  with nftables. At start it adds the table `inet gameplay_bench` with two counters per `port`: bytes arriving
+  for the port (input hook) and bytes leaving it (output hook). That works on loopback too, so the bots can
+  run on the same machine. The counts are IP packet bytes, IP and TCP headers included. Traffic on other ports
+  (telemetry, update checks) isn't counted, where in Docker the whole container's traffic was. The counters
+  keep counting across sampler restarts; `nft delete table inet gameplay_bench` removes them.
+- **Tick time.** `report.py` reads the `tick query` answers from the `log` file. A log doesn't say when its
+  answers were written (Paper gives only the time of day, PEX prints command output with no time at all), so
+  the sampler notes the log's size each time it sends `tick query` (`tick_queries.csv`) and the report times
+  each answer by the last query sent before it. Append to the log (`>>`) and don't truncate it during a run.
 
 ## Things to know
 
