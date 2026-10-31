@@ -112,14 +112,15 @@ for key, (label, prefix, srv) in SERVERS.items():
             prev = v if v is not None else prev
         s[f.replace("_mib", "_per_min")] = out
     # MSPT from tick query output
-    mspt, p95 = collections.defaultdict(list), collections.defaultdict(list)
+    mspt, p50, p95, p99 = (collections.defaultdict(list) for _ in range(4))
     for t, line in console_lines(key, srv):
         if t < start:
             continue
         if (a := avg_re.search(line)):
             mspt[minute(t)].append(float(a.group(1)))
         if (p := pct_re.search(line)):
-            p95[minute(t)].append(float(p.group(2)))
+            for d, g in ((p50, 1), (p95, 2), (p99, 3)):
+                d[minute(t)].append(float(p.group(g)))
     s["mspt"] = series(mspt, nd=2)
     s["mspt_p95"] = series(p95, nd=2)
     w = {minute(r["unix_time"]): float(r["world_mib"]) for r in worlds if r["server"] == key}
@@ -167,7 +168,7 @@ for key, (label, prefix, srv) in SERVERS.items():
     rd = [float(r["read_mib"]) for r in srows]
     tx = [float(r["net_tx_mib"]) for r in srows]
     allm = [v for vs in mspt.values() for v in vs]
-    allp = [v for vs in p95.values() for v in vs]
+    allp50, allp, allp99 = ([v for vs in d.values() for v in vs] for d in (p50, p95, p99))
     fixed = [r for r in srows if int(r["unix_time"]) >= thread_fix]
     tops = [float(r["top_thread_pct"]) for r in fixed if r["top_thread_pct"]]
     act = [float(r["threads_active"]) for r in fixed if r["threads_active"]]
@@ -183,6 +184,8 @@ for key, (label, prefix, srv) in SERVERS.items():
         "written_mib": round(wr[-1] - wr[0], 1) if wr else None, "read_mib": round(rd[-1] - rd[0], 1) if rd else None,
         "net_tx_mib": round(tx[-1] - tx[0], 1) if tx else None, "world_mib": ws[-1] if ws else None,
         "mspt_avg": round(statistics.fmean(allm), 2) if allm else None, "mspt_p95": round(statistics.fmean(allp), 2) if allp else None,
+        "mspt_p50": round(statistics.fmean(allp50), 2) if allp50 else None,
+        "mspt_p99": round(statistics.fmean(allp99), 2) if allp99 else None,
         "mspt_max": max(allm) if allm else None, "over_50": sum(1 for v in allm if v > 50),
         "placed": totals["placed"], "broken": totals["broken"], "chests": totals["chests"],
         "pickups": totals["pickups"], "deaths": totals["deaths"], "ended_early": early,
@@ -197,15 +200,15 @@ else:
     html = html.replace('<section class="findings" id="findings-box">', '<section class="findings" id="findings-box" hidden>')
 open(out_html, "w").write(html)
 hdr = ["server", "cpu%", "cores", "top thr%", "act thr", "mem avg", "mem pk", "written", "read", "net tx",
-       "world", "mspt", "p95", "max", ">50", "placed", "broken", "chests", "pickups", "early"]
+       "world", "mspt", "p50", "p95", "p99", "max", ">50", "placed", "broken", "chests", "pickups", "early"]
 print(f"elapsed {data['elapsed_min']} min")
 print(" ".join(f"{h:>8}" for h in hdr))
 for key, (label, _, _) in SERVERS.items():
     sm = data["summary"][key]
     vals = [label, sm["cpu_avg"], sm["cores_avg"], sm["top_thread_avg"], sm["threads_active_avg"], sm["mem_avg"],
             sm["mem_peak"], sm["written_mib"], sm["read_mib"], sm["net_tx_mib"], sm["world_mib"], sm["mspt_avg"],
-            sm["mspt_p95"], sm["mspt_max"], sm["over_50"], sm["placed"], sm["broken"], sm["chests"], sm["pickups"],
-            sm["ended_early"]]
+            sm["mspt_p50"], sm["mspt_p95"], sm["mspt_p99"], sm["mspt_max"], sm["over_50"], sm["placed"], sm["broken"],
+            sm["chests"], sm["pickups"], sm["ended_early"]]
     print(" ".join(f"{str(v):>8}" for v in vals))
 for key in SERVERS:
     print(key, "threads:", ", ".join(f"{g['group']} {g['pct']}%" for g in data["threads"][key][:6]))

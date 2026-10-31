@@ -189,7 +189,9 @@ function renderLegend() {
 const ROWS = [
   ["Tick time"],
   ["Average MSPT", "mspt_avg", 2, "low", " ms"],
+  ["Median MSPT", "mspt_p50", 2, "low", " ms"],
   ["95th-percentile MSPT", "mspt_p95", 2, "low", " ms"],
+  ["99th-percentile MSPT", "mspt_p99", 2, "low", " ms"],
   ["Worst minute MSPT", "mspt_max", 1, "low", " ms"],
   ["Samples over 50 ms", "over_50", 0, "low", ""],
   ["CPU"],
