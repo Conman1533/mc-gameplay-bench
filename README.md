@@ -42,10 +42,11 @@ Per-server setup for vanilla, Paper, Pumpkin, PEX, GraalVM builds, SteelMC and o
 1. **Give every server a fresh copy of the world.** Extract `world/base-world-262.tgz` and use
    `base-world-262/` as each server's `world/`. Use the same view distance (10) and simulation distance (10)
    everywhere, and turn off spawn protection: the builders work near spawn.
-2. **Whitelist the bots** (offline UUIDs differ between Java servers and Pumpkin-based ones):
+2. **Whitelist the bots** (upstream Pumpkin computes offline UUIDs its own way):
    ```
    python3 whitelist.py Paper vanilla > whitelist.json          # vanilla, Paper, Spigot…
-   python3 whitelist.py Pex pumpkin > data/whitelist.json        # Pumpkin, PEX
+   python3 whitelist.py Pex vanilla > data/whitelist.json        # PEX 300621c3e or later
+   python3 whitelist.py Pumpkin pumpkin > data/whitelist.json    # Pumpkin, older PEX
    ```
 3. **Describe the servers** in a `servers.json` (see `example/servers.json`). Per server: `key`, `label`,
    `port`, `bot_prefix` (bot names are `<prefix>Builder0`…), `container` (Docker name or ID) or `unit` and

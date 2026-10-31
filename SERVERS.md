@@ -63,8 +63,10 @@ simulation_distance = 10
 sections). Set both.
 
 - `encryption = false` is required. With it on, the bots hang at login and the server logs nothing.
-- Whitelist: Pumpkin computes offline UUIDs differently from Java servers, so use
-  `python3 whitelist.py <bot_prefix> pumpkin > data/whitelist.json`, then start the server or run `whitelist reload`.
+- Whitelist: PEX at `300621c3e` or later computes offline UUIDs like vanilla, so use
+  `python3 whitelist.py <bot_prefix> vanilla > data/whitelist.json`. Upstream Pumpkin and older PEX builds use their
+  own scheme: `python3 whitelist.py <bot_prefix> pumpkin > data/whitelist.json`. Then start the server
+  or run `whitelist reload`.
 - World: extract the tarball and rename `base-world-262/` to `world/`. Pumpkin and PEX read the vanilla world as is.
 - Console:
   - Pelican: `wings:<server-uuid>`. Set `use_tty = false` in `pumpkin.toml`, or the panel's stop can hang.
