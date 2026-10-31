@@ -10,7 +10,8 @@ Every 10 s, per server (from the cgroup v2 of its systemd unit or Docker contain
 Every 30 s: `tick query` on every server's console. report.py reads the answers from docker logs, or from
 the server's "log" file: for that, tick_queries.csv records the log's size at each send.
 Every 60 s: world size (if the server has "world_dir") and free space, with a disk guard that sends
-`stop` to a server whose world passes MAX_WORLD_MIB, or to every server under MIN_FREE_GIB free.
+`stop` to a server whose world passes MAX_WORLD_MIB, or to every server under MIN_FREE_GIB free
+("min_free_gib" in servers.json, default 20).
 """
 import collections, csv, json, os, re, shutil, subprocess, sys, time
 
@@ -18,7 +19,7 @@ import console
 
 CFG = console.load_servers(sys.argv[1])
 SERVERS = {srv["key"]: srv for srv in CFG["servers"]}
-MIN_FREE_GIB = 20
+MIN_FREE_GIB = CFG.get("min_free_gib", 20)
 MAX_WORLD_MIB = 5120
 CLK = os.sysconf("SC_CLK_TCK")
 INTERVAL = 10

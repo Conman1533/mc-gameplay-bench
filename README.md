@@ -69,7 +69,7 @@ Per-server setup for vanilla, Paper, Pumpkin, PEX, GraalVM builds, SteelMC and o
    `CMD_PREFIX`, e.g. `CMD_PREFIX="pct exec 109 --"`.
 
 The sampler's disk guard sends `stop` to a server whose world passes 5 GiB, or to all of them when the disk
-under `disk_guard_path` has less than 20 GiB free.
+under `disk_guard_path` has less than 20 GiB free (`min_free_gib` in `servers.json` changes that floor).
 
 ## Without Docker
 
