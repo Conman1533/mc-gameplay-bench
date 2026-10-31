@@ -114,6 +114,9 @@ and name the unit and the log in `servers.json`:
   comparing gameplay.
 - **Paper's connection throttle** refuses a reconnect from the same IP within 4 s. The fleet retries failed
   joins after 5–20 s.
+- **Short runs.** The bots' first joins are spread over about 6 minutes. A run shorter than an hour shrinks
+  that spread in proportion, so a 5-minute check has every bot on within 30 s. Runs of an hour or more keep
+  the same schedule.
 - **Vanilla-style servers won't run `fill`/`setblock` in unloaded chunks.** Anything that builds stations
   must run while players are near them (or use `forceload`).
 - **Bot counts are server confirmations.** Vanilla-style servers confirm block breaks with a different packet

@@ -43,7 +43,9 @@ def main():
         name, cons = f"{server['bot_prefix']}{slot}", server["console"]
         rng = random.Random(idx * 7919 + 17)
         mine_z = None
-        time.sleep(idx * 15 + rng.uniform(0, 240))
+        # Bots start up to about 6 minutes apart. A run shorter than an hour shrinks that in proportion, so in a
+        # 5-minute smoke test every bot still joins (within 30 s) instead of only the first few.
+        time.sleep((idx * 15 + rng.uniform(0, 240)) * min(1.0, hours))
         session = 0
         while time.time() < end - 120:
             session += 1
