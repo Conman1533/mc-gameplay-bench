@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Role-playing offline bot for protocol 777 (Minecraft 26.3).
 
-usage: survbot.py <host> <port> <name> <seconds> <role> <x> <y> <z>
+usage: survbot.py [--seed S] <host> <port> <name> <seconds> <role> <x> <y> <z>
+--seed seeds the bot's random choices (explorer heading, chest opens, pauses); default 1.
 roles:
   builder   stands at x,y,z; places a 3x3 patch of blocks (hotbar slot 0) on the floor in front,
             mines it back (pickaxe in slot 1) and opens the chest at x-2,y,z every 30 s
@@ -43,15 +44,16 @@ def unpack_pos(v):
 
 
 class Bot:
-    def __init__(self, c, role, station):
+    def __init__(self, c, role, station, seed):
         self.c, self.role, self.station = c, role, station
+        self.rng = random.Random(seed)
         self.pos, self.eid, self.seq = None, None, 0
         self.stats = {"placed": 0, "broken": 0, "chests": 0, "pickups": 0, "deaths": 0}
         self.pending = {}                      # block pos -> "placed" | "broken" awaiting a block_update
         self.plan = []                         # queued (ticks_to_wait, action) steps
         self.wait = 0
         self.container = None
-        self.heading = random.uniform(0, 2 * math.pi)
+        self.heading = self.rng.uniform(0, 2 * math.pi)
         self.dirx, self.leg = 1, 0             # miner state
 
     # --- packets -------------------------------------------------------------------------
@@ -133,7 +135,7 @@ class Bot:
         for bx, bz in cells:
             steps.append((5, lambda bx=bx, bz=bz: self.dig(bx, sy, bz, START_DESTROY)))
             steps.append((DIG_TICKS, lambda bx=bx, bz=bz: self.dig(bx, sy, bz, STOP_DESTROY)))
-        if random.random() < 0.6:
+        if self.rng.random() < 0.6:
             steps.append((20, lambda: self.open_chest(sx - 2, sy, sz)))
             steps.append((60, self.close_container))
         steps.append((40, lambda: None))
@@ -155,15 +157,15 @@ class Bot:
         self.leg += 1
         if self.leg >= 43:
             self.leg, self.dirx = 0, -self.dirx
-        steps.append((random.randint(5, 20), lambda: None))
+        steps.append((self.rng.randint(5, 20), lambda: None))
         return steps
 
     def tick(self):
         if self.pos is None:
             return
         if self.role == "explorer":
-            if random.random() < 0.005:
-                self.heading = random.uniform(0, 2 * math.pi)
+            if self.rng.random() < 0.005:
+                self.heading = self.rng.uniform(0, 2 * math.pi)
             self.pos[0] += math.cos(self.heading) * WALK * 0.5
             self.pos[2] += math.sin(self.heading) * WALK * 0.5
             self.c.send(wb.SB_PLAY_MOVE_POS, struct.pack(">ddd", *self.pos) + b"\x00")
@@ -179,7 +181,7 @@ class Bot:
             self.wait -= 1
             return
         if self.role == "afk" or (not self.plan and not self.at_station() and self.role == "builder"):
-            if random.random() < 0.05:
+            if self.rng.random() < 0.05:
                 self.c.send(SB_MOVE_STATUS, b"\x01")
             return
         if self.wait > 0:
@@ -201,12 +203,16 @@ class Bot:
 
 
 def main():
-    host, port, name, seconds, role = sys.argv[1], int(sys.argv[2]), sys.argv[3], float(sys.argv[4]), sys.argv[5]
-    station = [float(v) for v in sys.argv[6:9]] if len(sys.argv) >= 9 else [0, 0, 0]
+    args, seed = sys.argv[1:], "1"
+    if args[:1] == ["--seed"]:
+        seed, args = args[1], args[2:]
+    host, port, name, seconds, role = args[0], int(args[1]), args[2], float(args[3]), args[4]
+    station = [float(v) for v in args[5:8]] if len(args) >= 8 else [0, 0, 0]
+    print(f"{time.time():.0f} seed {seed}", flush=True)
     c = wb.Conn(host, port)
     wb.login(c, host, port, name)
     c.send(wb.SB_CFG_CLIENT_INFO, string("en_us") + bytes([8]) + varint(0) + b"\x01" + bytes([0x7F]) + varint(1) + b"\x00\x01" + varint(0))
-    bot = Bot(c, role, station)
+    bot = Bot(c, role, station, seed)
     inbox = queue.Queue()
 
     def reader():

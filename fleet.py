@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Realistic-session bot fleet: 8 bots per server, the same seeded schedule on every server.
 
-usage: fleet.py <servers.json> <out_dir> <hours> <host>
+usage: fleet.py [--seed N] <servers.json> <out_dir> <hours> <host>
 Slots per server: 3 builders, 2 miners, 2 AFK, 1 explorer. Each slot plays sessions of 20-60 min with
 5-15 min breaks; the schedule is seeded per slot, so every server sees the same one. At each join the
 driver sets the bot's gamemode, gives it blocks and a pickaxe, and teleports it to its station through
 the server's console (see console.py). Bot logs and fleet-events.log go to out_dir.
+--seed (default 1) seeds what the bots do in each session, such as the explorer's heading, so a run with
+the same seed walks the same paths. Each session gets its own seed, made from this one, the slot and the session.
 """
 import os, random, re, subprocess, sys, threading, time
 
@@ -27,7 +29,10 @@ MINE_BOX = {"Miner0": (0, 146, "fill 50 130 0 90 133 149 stone"), "Miner1": (-16
 
 
 def main():
-    cfg, out, hours, host = console.load_servers(sys.argv[1]), sys.argv[2], float(sys.argv[3]), sys.argv[4]
+    args, seed = sys.argv[1:], "1"
+    if args[:1] == ["--seed"]:
+        seed, args = args[1], args[2:]
+    cfg, out, hours, host = console.load_servers(args[0]), args[1], float(args[2]), args[3]
     end = time.time() + hours * 3600
     os.makedirs(out, exist_ok=True)
     with open(os.path.join(out, "start_unix"), "w") as f:
@@ -38,6 +43,8 @@ def main():
     def log(msg):
         with lock:
             events.write(f"{time.strftime('%H:%M:%S')} {msg}\n")
+
+    log(f"bot seed {seed}")
 
     def run_slot(server, idx, slot, role, station):
         name, cons = f"{server['bot_prefix']}{slot}", server["console"]
@@ -63,7 +70,8 @@ def main():
                 console.send(cons, f"fill 50 131 {mine_z} 50 132 {mine_z} air")
             logf = os.path.join(out, f"bot-{name}.log")
             with open(logf, "a") as f:
-                proc = subprocess.Popen([sys.executable, "-I", os.path.join(HERE, "bot", "survbot.py"), host,
+                proc = subprocess.Popen([sys.executable, "-I", os.path.join(HERE, "bot", "survbot.py"),
+                                         "--seed", f"{seed}-{slot}-{session}", host,
                                          str(server["port"]), name, str(length), role, *map(str, st)],
                                         stdout=f, stderr=subprocess.STDOUT)
             joined = False

@@ -11,7 +11,7 @@ seeded schedule:
 | 3 builders | place a 3×3 patch of cobblestone, mine it back, and open a chest every 30 s or so |
 | 2 miners | dig a 2-high tunnel through a stone block, 40 blocks one way, 3 across, then back |
 | 2 AFK | stand still, sending the idle updates a real client sends |
-| 1 explorer | creative mode, walks slowly in a random direction, loading new terrain |
+| 1 explorer | creative mode, walks slowly in a seeded random direction, loading new terrain |
 
 Each bot plays 20–60 minute sessions with 5–15 minute breaks. The world (`world/base-world-262.tgz`, built on
 vanilla 26.2) also has an egg farm (chickens → hoppers → chest) and a 9×9 wheat farm that run on their own.
@@ -61,6 +61,9 @@ Per-server setup for vanilla, Paper, Pumpkin, PEX, GraalVM builds, SteelMC and o
    python3 sampler.py servers.json run/ 2.05
    python3 fleet.py servers.json bots/ 2 <server-host-ip>
    ```
+   What the bots do in each session (the explorer's heading, chest opens, pauses) is seeded too, so every run
+   walks the same paths. `fleet.py --seed N servers.json ...` picks another seed (the default is 1); the seed
+   is the first line of `fleet-events.log`.
 5. **Build the report** at any point during or after the run:
    ```
    python3 report.py servers.json run/ bots/ report.html [findings.html]
